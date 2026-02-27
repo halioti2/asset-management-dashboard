@@ -8,6 +8,8 @@ __pycache__/
 *.pyc
 *.pyo
 *.db
+*.db-shm
+*.db-wal
 backend/sync/last_poll_cache.json
 
 # Node
