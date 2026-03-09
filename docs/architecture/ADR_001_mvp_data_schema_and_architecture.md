@@ -270,6 +270,14 @@ Special endpoint for Return journey.
 3. Store updated cache
 ```
 
+### Startup Behavior
+
+`_initial_sync()` runs on every boot but only does work when `count_assets() == 0` (DB is empty). On first boot against a fresh DB it pulls all rows from Sheets into SQLite. On all subsequent boots it skips immediately.
+
+The background poller is configured with `next_run_time=datetime.now(timezone.utc)` so it fires once immediately on startup before settling into its 3-minute interval. This ensures any Sheets changes made while the server was down are reflected in SQLite before the first request is served, without performing a full blind overwrite.
+
+`force_sync_from_sheets()` exists as an admin escape hatch (exposed via `POST /api/assets/sync`) but is not called automatically. It performs a blind overwrite of SQLite with current Sheets state — no conflict check — and should only be used manually when a known drift needs correcting.
+
 ---
 
 ## Tech Stack Decisions

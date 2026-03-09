@@ -1,36 +1,41 @@
-app = "asset-management-dashboard"
-primary_region = "iad"
+# fly.toml app configuration file generated for frontend-rough-cloud-3819 on 2026-03-09T02:11:13-04:00
+#
+# See https://fly.io/docs/reference/configuration/ for information about how to use this file.
+#
+
+app = 'frontend-rough-cloud-3819'
+primary_region = 'ewr'
 
 [build]
-  dockerfile = "backend/Dockerfile"
+  dockerfile = 'Dockerfile'
 
 [env]
-  PORT = "8080"
-  FLASK_ENV = "production"
-  DATABASE_PATH = "/data/assets.db"
+  DATABASE_PATH = '/data/assets.db'
+  DATA_DIR = '/data'
+  FLASK_ENV = 'production'
+  PORT = '8080'
 
 [[mounts]]
-  source = "asset_db"
-  destination = "/data"
+  source = 'assets_data'
+  destination = '/data'
+  initial_size = '1gb'
 
-[[services]]
+[http_service]
   internal_port = 8080
-  protocol = "tcp"
+  force_https = true
+  auto_stop_machines = 'off'
+  auto_start_machines = true
+  min_machines_running = 1
 
-  [[services.ports]]
-    handlers = ["http"]
-    port = 80
-
-  [[services.ports]]
-    handlers = ["tls", "http"]
-    port = 443
-
-  [services.concurrency]
-    type = "connections"
-    hard_limit = 25
-    soft_limit = 20
+  [[http_service.checks]]
+    interval = '30s'
+    timeout = '5s'
+    grace_period = '30s'
+    method = 'GET'
+    path = '/api/assets'
 
 [[vm]]
-  memory = "256mb"
-  cpu_kind = "shared"
+  memory = '512mb'
+  cpu_kind = 'shared'
   cpus = 1
+  memory_mb = 512

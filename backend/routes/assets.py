@@ -5,6 +5,7 @@ from models import (
     derive_status,
 )
 from sync.sheets import write_row, append_row
+from sync.poller import update_cache_for_row
 
 bp = Blueprint('assets', __name__, url_prefix='/api/assets')
 
@@ -14,9 +15,11 @@ def _error(msg, code=400):
 
 
 def _queue_sheets_write(asset):
-    """Fire-and-forget sheets write; log errors but don't fail the request."""
+    """Fire-and-forget sheets write; log errors but don't fail the request.
+    Updates the poll cache on success so the poller doesn't re-push stale data."""
     try:
         write_row(asset)
+        update_cache_for_row(asset)
     except Exception as e:
         import logging
         logging.getLogger(__name__).error(f"sheets write failed for {asset.get('serial_number')}: {e}")
@@ -126,6 +129,18 @@ def return_asset(asset_id):
         'returned': today,
     })
     _queue_sheets_write(updated)
+
+    # Create a fresh Not Assigned record for the same device
+    new_asset = insert_asset({
+        'label': asset.get('label', ''),
+        'type': asset.get('type', ''),
+        'serial_number': asset.get('serial_number', ''),
+        'category': asset.get('category', ''),
+        'date_assigned': asset.get('date_assigned', ''),
+        'lease_end_date': asset.get('lease_end_date', ''),
+    })
+    _queue_sheets_append(new_asset)
+
     return jsonify(updated)
 
 
@@ -151,6 +166,18 @@ def lock_asset(asset_id):
     updated = update_asset(asset_id, {'notes': new_notes})
     _queue_sheets_write(updated)
     return jsonify(updated)
+
+
+# ── POST /api/sync ─────────────────────────────────────────────────────────────
+
+@bp.route('/sync', methods=['POST'])
+def sync_from_sheets():
+    try:
+        from sync.poller import force_sync_from_sheets
+        count = force_sync_from_sheets()
+        return jsonify({'synced': count})
+    except Exception as e:
+        return _error(str(e), 500)
 
 
 # ── PATCH /api/assets/notes  (J5 — bulk) ──────────────────────────────────────

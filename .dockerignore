@@ -1,0 +1,48 @@
+# flyctl launch added from .gitignore
+# Environment & secrets
+**/.env
+**/*.env
+
+# Python
+**/venv
+**/__pycache__
+**/*.pyc
+**/*.pyo
+**/*.db
+**/*.db-shm
+**/*.db-wal
+**/backend/sync/last_poll_cache.json
+
+# Node
+**/frontend/node_modules
+**/frontend/dist
+
+# macOS
+**/.DS_Store
+
+# flyctl launch added from frontend/.gitignore
+# Logs
+frontend/**/logs
+frontend/**/*.log
+frontend/**/npm-debug.log*
+frontend/**/yarn-debug.log*
+frontend/**/yarn-error.log*
+frontend/**/pnpm-debug.log*
+frontend/**/lerna-debug.log*
+
+frontend/**/node_modules
+frontend/**/dist
+frontend/**/dist-ssr
+frontend/**/*.local
+
+# Editor directories and files
+frontend/**/.vscode/*
+!frontend/**/.vscode/extensions.json
+frontend/**/.idea
+frontend/**/.DS_Store
+frontend/**/*.suo
+frontend/**/*.ntvs*
+frontend/**/*.njsproj
+frontend/**/*.sln
+frontend/**/*.sw?
+fly.toml

@@ -135,7 +135,7 @@ def read_all_rows():
 
     headers = values[0]
     rows = []
-    for raw_row in values[1:]:
+    for i, raw_row in enumerate(values[1:]):
         padded = raw_row + [''] * (len(headers) - len(raw_row))
         row_dict = {}
         for header, value in zip(headers, padded):
@@ -143,6 +143,7 @@ def read_all_rows():
             if field:
                 row_dict[field] = value.strip() if isinstance(value, str) else value
         if row_dict.get('serial_number'):
+            row_dict['sheets_row'] = i + 2  # +1 for 0-index, +1 for header row
             rows.append(row_dict)
     return rows
 
@@ -179,19 +180,25 @@ def _asset_to_row_values(asset_dict, headers):
 
 
 def write_row(asset_dict):
-    """Update the existing row for this asset's serial number."""
+    """Update the existing Sheets row for this asset.
+    Uses sheets_row (stored in SQLite) as the direct row index — no serial scan needed."""
     service = get_service()
     sheet_id = _get_sheet_id()
     serial = asset_dict.get('serial_number', '')
+    sheets_row = asset_dict.get('sheets_row')
     headers = _get_headers(service, sheet_id)
-    index_map = _find_row_index(service, sheet_id)
 
-    row_index = index_map.get(serial)
-    if row_index is None:
+    if not sheets_row:
+        # Fallback for records without a stored row index — scan by serial
+        logger.warning(f"write_row: no sheets_row for {serial!r}, scanning by serial")
+        index_map = _find_row_index(service, sheet_id)
+        sheets_row = index_map.get(serial)
+
+    if not sheets_row:
         logger.warning(f"write_row: serial {serial!r} not found in sheet, appending")
         return append_row(asset_dict)
 
-    range_notation = f"{SHEET_NAME}!A{row_index}"
+    range_notation = f"{SHEET_NAME}!A{sheets_row}"
     body = {'values': [_asset_to_row_values(asset_dict, headers)]}
     service.spreadsheets().values().update(
         spreadsheetId=sheet_id,
@@ -199,7 +206,7 @@ def write_row(asset_dict):
         valueInputOption='RAW',
         body=body,
     ).execute()
-    logger.info(f"write_row: updated row {row_index} for serial {serial!r}")
+    logger.info(f"write_row: updated row {sheets_row} for serial {serial!r}")
 
 
 def append_row(asset_dict):

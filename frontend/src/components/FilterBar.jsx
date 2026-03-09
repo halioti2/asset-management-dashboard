@@ -11,6 +11,7 @@ export default function FilterBar({ filters, onChange }) {
           className="rounded-md border border-gray-300 px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
         >
           <option value="">All</option>
+          <option value="not_historical">All Laptops</option>
           <option value="Checked Out">Checked Out</option>
           <option value="Not Assigned">Not Assigned</option>
           <option value="Historical">Historical</option>

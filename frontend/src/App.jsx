@@ -29,7 +29,8 @@ function parseLeaseDate(dateStr) {
 
 function applyFilters(assets, filters) {
   return assets.filter(a => {
-    if (filters.status && a.status !== filters.status) return false
+    if (filters.status === 'not_historical' && a.status === 'Historical') return false
+    if (filters.status && filters.status !== 'not_historical' && a.status !== filters.status) return false
     if (filters.type && (a.type || '').toLowerCase() !== filters.type.toLowerCase()) return false
     if (filters.assigned_to && !(a.assigned_to || '').toLowerCase().includes(filters.assigned_to.toLowerCase())) return false
     if (filters.serial_number && !(a.serial_number || '').toLowerCase().includes(filters.serial_number.toLowerCase())) return false
@@ -69,9 +70,12 @@ export default function App() {
   useEffect(() => { fetchAssets() }, [fetchAssets])
 
   const handleFormToggle = (formId) => {
-    setActiveForm(prev => prev === formId ? null : formId)
-    setSelectedIds(new Set())
-    setSelectedAsset(null)
+    const isClosing = activeForm === formId
+    setActiveForm(isClosing ? null : formId)
+    if (isClosing) {
+      setSelectedIds(new Set())
+      setSelectedAsset(null)
+    }
   }
 
   const handleSuccess = () => {
@@ -79,6 +83,16 @@ export default function App() {
     setSelectedIds(new Set())
     setSelectedAsset(null)
     fetchAssets()
+  }
+
+  const handleSelectionChange = (newSelectedIds) => {
+    setSelectedIds(newSelectedIds)
+    if (newSelectedIds.size === 1) {
+      const id = [...newSelectedIds][0]
+      setSelectedAsset(assets.find(a => a.id === id) || null)
+    } else {
+      setSelectedAsset(null)
+    }
   }
 
   const handleRowClick = (asset) => {
@@ -122,7 +136,7 @@ export default function App() {
           <AssetTable
             assets={filtered}
             selectedIds={selectedIds}
-            onSelectionChange={setSelectedIds}
+            onSelectionChange={handleSelectionChange}
             onRowClick={handleRowClick}
           />
         )}

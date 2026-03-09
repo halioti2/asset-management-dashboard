@@ -56,13 +56,40 @@ Clicking an action button opens a form panel in the top section above the table.
 
 ## Data Model
 
+### Original Google Sheets Columns (pre-app)
+
+The Distribution Tracker sheet as it existed before app integration — no Email, Phone, or Last Updated columns.
+
+| Column | Type | Required | Notes |
+|--------|------|----------|-------|
+| Label | text | Yes | Equipment identifier (e.g. "MacBook Air #1") |
+| Type | text | Yes | MacBook Air, MacBook Pro, Dell XPS, iPad, etc. |
+| Serial # | text | Yes | Identifies the physical device; multiple rows per serial allowed (one per checkout event) |
+| Category | text | Yes | Purchased (Apple), Lease (Temp), etc. |
+| Date Assigned | date | Yes | When added to inventory |
+| Lease End Date | date | No | Apple lease expiry |
+| Assigned To | text | No | Current borrower name |
+| Notes | text | No | Single free-text field: condition, setup, lock reason, misc |
+| Returned | date | No | When returned (empty = active checkout) |
+
+#### Original Derived Status (not stored)
+
+| Status | Condition |
+|--------|-----------|
+| Checked Out | Category = "Lease (Temp)" AND Returned empty AND Assigned To set AND Assigned To ≠ "ready to assign" |
+| Historical | Category = "Lease (Temp)" AND Assigned To set AND Assigned To ≠ "ready to assign" AND Returned filled |
+| Not Assigned | Returned empty AND (Assigned To empty OR Assigned To = "ready to assign") |
+| Locked | Notes contains lock reason |
+
+---
+
 ### SQLite / Google Sheets Columns
 
 | Field | Type | Required | Notes |
 |-------|------|----------|-------|
 | label | text | No | Equipment label (e.g. "MacBook Air #1") |
 | type | text | Yes | MacBook Air, MacBook Pro, Dell XPS, iPad, etc. |
-| serial_number | text | Yes | Unique identifier |
+| serial_number | text | Yes | Identifies the physical device; multiple records per serial allowed (one per checkout event) |
 | category | text | Yes | Purchased (Apple), Lease (Temp), etc. |
 | date_assigned | date | Yes | When added to inventory |
 | lease_end_date | date | No | Apple lease expiry |
@@ -72,13 +99,15 @@ Clicking an action button opens a form panel in the top section above the table.
 | notes | text | No | Multi-purpose: condition, setup, lock reason, misc |
 | returned | date | No | When returned (empty = active checkout) |
 | last_updated | datetime | System | Auto-updated on every write, not displayed |
+| sheets_row | integer | System | Sheets row index for this record; used as sync key to map SQLite rows to Sheets rows, not displayed |
 
 ### Derived Status (not stored)
 
 | Status | Condition |
 |--------|-----------|
-| Checked Out | Category = "Lease Temp" AND returned empty AND assigned_to set AND assigned_to ≠ "ready to assign" |
-| Historical | Category = "Lease Temp" AND assigned_to set AND assigned_to ≠ "ready to assign" AND returned filled |
+| Checked Out | Category = "Lease (Temp)" AND returned empty AND assigned_to set AND assigned_to ≠ "ready to assign" |
+| Historical | Category = "Lease (Temp)" AND assigned_to set AND assigned_to ≠ "ready to assign" AND returned filled |
+| Historical | Category = "Lease - Returned" AND assigned_to set AND assigned_to ≠ "ready to assign" (legacy category implies returned) |
 | Not Assigned | returned empty AND (assigned_to empty OR assigned_to = "ready to assign") |
 | Locked | notes contains lock reason |
 
@@ -92,6 +121,9 @@ Admin assigns a laptop to a student.
 **Trigger:** Click [Check Out]
 **Requires:** Select one laptop from table
 
+**Task inputs:**
+- targeted record
+
 **Form inputs:**
 - Assigned To (text, required)
 - Email (email, required)
@@ -104,7 +136,7 @@ Admin assigns a laptop to a student.
 - Lease End Date (from selected row, Apple lease date)
 
 **On submit:**
-- Writes: assigned_to, email, phone, last_updated
+- Writes to existing targeted record: assigned_to, email, phone, last_updated
 - Status derives to: "Checked Out"
 - Validation: all required fields filled, laptop must be Not Assigned
 
@@ -116,6 +148,9 @@ Admin processes a returned laptop and notes condition.
 **Trigger:** Click [Return]
 **Requires:** Select one laptop from table
 
+**Task inputs:**
+- targeted record
+
 **Form inputs:**
 - Notes (textarea — condition: Excellent / Good / Fair / Damaged, required)
 - [MDM Wipe] button (non-functional placeholder)
@@ -126,8 +161,9 @@ Admin processes a returned laptop and notes condition.
 - Assigned To (from selected row)
 
 **On submit:**
-- Writes: notes (appended), returned = today, last_updated
-- Status derives to: "Historical"
+1. Updates the existing Checked Out record: notes (appended), returned = today, last_updated → status derives to "Historical"
+2. Creates a new record for the same device copying: label, type, serial_number, category, date_assigned, lease_end_date — leaving assigned_to, email, phone, notes, returned empty → status derives to "Not Assigned"
+3. New record is appended as a new row in Google Sheets
 - Validation: laptop must be Checked Out
 
 ---
@@ -149,7 +185,7 @@ Admin adds new equipment to inventory.
 
 **On submit:**
 - Creates new record
-- Validation: serial_number must be unique
+- Validation: all required fields filled
 
 ---
 
@@ -210,23 +246,26 @@ Admin edits or appends notes on one or more records.
 
 ## Sync Architecture
 
+### Row-Based Sync
+Each Sheets row maps to exactly one SQLite record via `sheets_row` (the Sheets row index). Serial number is not the sync key — one device can have multiple rows in both Sheets and SQLite (one per checkout event).
+
 ### Flow
 ```
 React → PATCH /api/assets/:id/checkout
       → Flask writes SQLite immediately
-      → Flask queues Sheets API write
+      → Flask queues Sheets API write (to the specific sheets_row)
       → Returns 200 to React
 
 Background thread (every 3 min):
-  → Poll Google Sheets
-  → For each row:
+  → Poll Google Sheets (all rows)
+  → For each row (keyed by sheets_row index):
     - Poll unchanged + DB differs  → frontend wins, retry Sheets write
     - Poll changed + DB unchanged  → external change, merge to SQLite
     - Poll changed + DB differs    → CONFLICT, Sheets wins, log it
 ```
 
-### Initial Sync
-On first startup, poll Google Sheets and populate SQLite. Sheets is source of truth on boot.
+### Startup Sync
+On first boot (DB is empty), pull all rows from Sheets → SQLite to seed the database. On subsequent boots the DB already contains data; no full startup sync runs. Instead, the background poller fires immediately on startup (rather than waiting the first 3-minute interval) to pick up any Sheets changes that occurred while the server was down before serving the first request.
 
 ---
 
