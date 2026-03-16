@@ -105,11 +105,14 @@ The Distribution Tracker sheet as it existed before app integration — no Email
 
 | Status | Condition |
 |--------|-----------|
-| Checked Out | Category = "Lease (Temp)" AND returned empty AND assigned_to set AND assigned_to ≠ "ready to assign" |
+| Locked | notes contains lock keyword (evaluated first) |
 | Historical | Category = "Lease (Temp)" AND assigned_to set AND assigned_to ≠ "ready to assign" AND returned filled |
 | Historical | Category = "Lease - Returned" AND assigned_to set AND assigned_to ≠ "ready to assign" (legacy category implies returned) |
-| Not Assigned | returned empty AND (assigned_to empty OR assigned_to = "ready to assign") |
-| Locked | notes contains lock reason |
+| Checked Out | Category = "Lease (Temp)" AND assigned_to set AND assigned_to ≠ "ready to assign" AND returned empty |
+| Not Assigned | assigned_to = "ready to assign" (explicit signal — see ADR 001 Addendum) |
+| Uncategorized | No rule matched — row has unusual/partial data from Sheets |
+
+> **Note:** "Not Assigned" was previously a fallthrough (anything not Locked/Historical/Checked Out). It is now an explicit check on `assigned_to = "ready to assign"`. The Return flow sets `assigned_to = "ready to assign"` on the new record it creates. See ADR 001 Addendum for full rationale.
 
 ---
 

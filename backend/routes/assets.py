@@ -130,7 +130,8 @@ def return_asset(asset_id):
     })
     _queue_sheets_write(updated)
 
-    # Create a fresh Not Assigned record for the same device
+    # Create a fresh Not Assigned record for the same device.
+    # assigned_to must be "ready to assign" so derive_status returns 'Not Assigned'.
     new_asset = insert_asset({
         'label': asset.get('label', ''),
         'type': asset.get('type', ''),
@@ -138,6 +139,7 @@ def return_asset(asset_id):
         'category': asset.get('category', ''),
         'date_assigned': asset.get('date_assigned', ''),
         'lease_end_date': asset.get('lease_end_date', ''),
+        'assigned_to': 'ready to assign',
     })
     _queue_sheets_append(new_asset)
 

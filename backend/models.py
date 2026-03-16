@@ -96,7 +96,10 @@ def derive_status(row):
         else:
             return 'Checked Out'
 
-    return 'Not Assigned'
+    if assigned_to.lower() == 'ready to assign':
+        return 'Not Assigned'
+
+    return 'Uncategorized'
 
 
 def row_to_dict(row):

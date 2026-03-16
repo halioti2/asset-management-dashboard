@@ -9,7 +9,7 @@ import AddLaptopForm from './components/forms/AddLaptopForm'
 import LockForm from './components/forms/LockForm'
 import UpdateNotesForm from './components/forms/UpdateNotesForm'
 
-const EMPTY_FILTERS = { status: '', type: '', assigned_to: '', serial_number: '', lease_end_after: '', lease_end_before: '' }
+const EMPTY_FILTERS = { status: '', type: '', assigned_to: '', serial_number: '', label: '', lease_end_after: '', lease_end_before: '' }
 
 function parseLeaseDate(dateStr) {
   // Handle "MM/DD/YYYY" format and "YYYY-MM-DD" format
@@ -34,6 +34,7 @@ function applyFilters(assets, filters) {
     if (filters.type && (a.type || '').toLowerCase() !== filters.type.toLowerCase()) return false
     if (filters.assigned_to && !(a.assigned_to || '').toLowerCase().includes(filters.assigned_to.toLowerCase())) return false
     if (filters.serial_number && !(a.serial_number || '').toLowerCase().includes(filters.serial_number.toLowerCase())) return false
+    if (filters.label && !(a.label || '').toLowerCase().includes(filters.label.toLowerCase())) return false
 
     if (filters.lease_end_after || filters.lease_end_before) {
       const assetDate = parseLeaseDate(a.lease_end_date)

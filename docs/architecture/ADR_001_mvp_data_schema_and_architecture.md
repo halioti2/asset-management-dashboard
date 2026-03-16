@@ -50,10 +50,33 @@ The original Google Sheets data model does not fully match the UI requirements f
 ### Derived Fields (calculated on-the-fly, not stored)
 
 **Status:** Determined by the following rules:
-- **Checked Out**: Type = "Lease Temp" AND Returned is empty AND Assigned To is set AND Assigned To ≠ "ready to assign"
-- **Historical Record**: Type = "Lease Temp" AND Assigned To is set AND Assigned To ≠ "ready to assign" AND Returned is filled
-- **Not Assigned**: Returned is empty AND (Assigned To is not set OR Assigned To = "ready to assign")
-- **Locked**: Notes contains lock reason (equipment marked as locked/compromised)
+- **Locked**: Notes contains lock keyword (checked first)
+- **Historical**: Category = "Lease - Returned" OR (Category = "Lease (Temp)" AND Assigned To set AND Assigned To ≠ "ready to assign" AND Returned filled)
+- **Checked Out**: Category = "Lease (Temp)" AND Assigned To set AND Assigned To ≠ "ready to assign" AND Returned empty
+- **Not Assigned**: Assigned To = "ready to assign" (explicit signal — see ADR 001 Addendum below)
+- **Uncategorized**: All other rows (no matching rule — see ADR 001 Addendum below)
+
+---
+
+## ADR 001 Addendum: Not Assigned Source of Truth (2026-03-09)
+
+### Decision
+
+`"ready to assign"` in the `assigned_to` column is the canonical signal for "Not Assigned" status. Rows that do not match any status rule are classified as `"Uncategorized"` rather than silently falling through to "Not Assigned."
+
+### Supersedes
+
+The original rule: `Not Assigned = returned empty AND (assigned_to empty OR assigned_to = "ready to assign")`
+
+### Rationale
+
+The original fallthrough approach caused edge cases from real Sheets data (unusual category values, partial rows, legacy formats) to appear as "Not Assigned" in the filter, making the filter unreliable. Using `"ready to assign"` as an explicit marker is consistent with how the spreadsheet was already being managed and gives the filter a single, trustworthy source of truth.
+
+### Consequences
+
+- Rows that don't match any rule surface as "Uncategorized" — visible and filterable, not hidden
+- The Return flow must set `assigned_to = "ready to assign"` on the new record it creates so it appears correctly as Not Assigned
+- The Checkout validation (`derive_status != 'Not Assigned'`) continues to work unchanged — only rows explicitly marked "ready to assign" are eligible for checkout
 
 ---
 

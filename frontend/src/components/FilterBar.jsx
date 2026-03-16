@@ -16,6 +16,7 @@ export default function FilterBar({ filters, onChange }) {
           <option value="Not Assigned">Not Assigned</option>
           <option value="Historical">Historical</option>
           <option value="Locked">Locked</option>
+          <option value="Uncategorized">Uncategorized</option>
         </select>
       </div>
 
@@ -41,6 +42,17 @@ export default function FilterBar({ filters, onChange }) {
           placeholder="Search name..."
           value={filters.assigned_to || ''}
           onChange={e => set('assigned_to', e.target.value)}
+          className="rounded-md border border-gray-300 px-2 py-1.5 text-sm w-36 focus:outline-none focus:ring-2 focus:ring-blue-500"
+        />
+      </div>
+
+      <div className="flex flex-col gap-1">
+        <label className="text-xs font-medium text-gray-500">Label</label>
+        <input
+          type="text"
+          placeholder="Search label..."
+          value={filters.label || ''}
+          onChange={e => set('label', e.target.value)}
           className="rounded-md border border-gray-300 px-2 py-1.5 text-sm w-36 focus:outline-none focus:ring-2 focus:ring-blue-500"
         />
       </div>
@@ -77,7 +89,7 @@ export default function FilterBar({ filters, onChange }) {
       </div>
 
       <button
-        onClick={() => onChange({ status: '', type: '', assigned_to: '', lease_end_after: '', lease_end_before: '' })}
+        onClick={() => onChange({ status: '', type: '', assigned_to: '', label: '', serial_number: '', lease_end_after: '', lease_end_before: '' })}
         className="ml-auto text-xs text-gray-400 hover:text-gray-600 underline self-end pb-1"
       >
         Clear filters
