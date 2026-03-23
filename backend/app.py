@@ -48,23 +48,22 @@ def create_app():
             return send_from_directory(FRONTEND_DIST, path)
         return send_from_directory(FRONTEND_DIST, 'index.html')
 
-    # In Flask debug mode the Werkzeug reloader spawns a parent watcher process
-    # AND a child worker process, both calling create_app(). We only want to run
-    # Sheets API calls and start the scheduler once — in the worker.
-    # WERKZEUG_RUN_MAIN is set to 'true' only in the reloader child process.
-    is_reloader_parent = (
-        os.getenv('FLASK_ENV') == 'development'
-        and os.environ.get('WERKZEUG_RUN_MAIN') != 'true'
-    )
-    if is_reloader_parent:
-        logger.info("Reloader parent process — skipping Sheets sync and scheduler")
-        return app
+    # In Flask debug mode, start the scheduler inline (no gunicorn fork risk).
+    # In production under gunicorn, the scheduler is started by gunicorn.conf.py
+    # post_fork hook after the worker process is forked, avoiding the
+    # fork-after-threading deadlock that occurs when a background thread is
+    # running in the master process at fork time.
+    if os.getenv('FLASK_ENV') == 'development':
+        is_reloader_parent = os.environ.get('WERKZEUG_RUN_MAIN') != 'true'
+        if not is_reloader_parent:
+            start_scheduler()
 
-    # Start background poller — runs immediately on startup, then every 3 minutes.
-    # The immediate first run handles initial sync (if DB is empty) and picks up
-    # any Sheets changes made while the server was down.
-    # Running in a background thread means create_app() returns immediately and
-    # health checks pass before the first Sheets API call completes.
+    return app
+
+
+def start_scheduler():
+    """Start the background poller scheduler. Called after fork in production
+    (via gunicorn.conf.py post_fork) or inline in development."""
     scheduler = BackgroundScheduler()
     scheduler.add_job(
         func=_startup_job,
@@ -76,8 +75,6 @@ def create_app():
     )
     scheduler.start()
     logger.info("Background poller started (runs now, then every 3 minutes)")
-
-    return app
 
 
 def _startup_job():

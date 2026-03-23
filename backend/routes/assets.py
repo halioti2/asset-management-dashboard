@@ -135,6 +135,7 @@ def return_asset(asset_id):
     updated = update_asset(asset_id, {
         'notes': new_notes,
         'returned': today,
+        'asset_status': 'Historical',
     })
     _queue_sheets_write(updated)
 
