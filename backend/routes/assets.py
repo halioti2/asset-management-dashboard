@@ -105,7 +105,7 @@ def checkout_asset(asset_id):
         'assigned_to': body['assigned_to'].strip(),
         'email': body['email'].strip(),
         'phone': body['phone'].strip(),
-        'asset_status': 'Temp',
+        'asset_status': 'Assigned',
     })
     _queue_sheets_write(updated)
     return jsonify(updated)

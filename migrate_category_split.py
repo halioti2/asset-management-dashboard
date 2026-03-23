@@ -41,9 +41,9 @@ DESIRED_HEADERS = [
 
 # Confirmed ownership mappings (see ADR 003)
 CATEGORY_TO_OWNERSHIP = {
-    'Lease (Temp)':      'Lease',
-    'Lease (Own)':       'Lease',
-    'Lease - Returned':  'Lease',
+    'Lease (Temp)':      'Lease-Temp',
+    'Lease (Own)':       'Lease-Own',
+    'Lease - Returned':  '',          # ownership left blank — can't distinguish Lease-Temp vs Lease-Own from old category
     'Purchased (Apple)': 'Purchased',
     'Purchased (Dell)':  'Purchased',
     'Donated':           'Donated',
@@ -70,7 +70,7 @@ def _derive_asset_status(category, assigned_to, returned):
     if assigned == 'ready to assign':
         return 'Ready to Assign'
     if assigned:
-        return 'Temp'
+        return 'Assigned'
     # assigned_to is blank — status unknown, do not assume Ready to Assign
     return ''
 

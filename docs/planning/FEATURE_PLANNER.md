@@ -21,6 +21,9 @@
 
 
 ### Should Have
+- [ ] Dev/staging pipeline
+  - [ ] Staging environment on Fly.io (separate app + sheet) so migrations and deploys can be validated before hitting prod
+  - [ ] Migration runbook / deployment checklist so rollback steps are documented and don't require a full git reset + new spreadsheet
 - [ ] Cleared Labels i.e. ready to assign
 - [ ] align filters with buttons
 - [ ] All historical macbook records categorized for easy sorting

@@ -40,16 +40,21 @@ Separating them makes each field independently queryable, easier to filter on, a
 
 ## Migration Strategy
 
-1. **Dry run first** — run `migrate_category_split.py --dry-run` against the sheet to print every row's transformation without writing anything. Review the output for any unrecognized category values and resolve them before proceeding.
-2. **Stop the app** (`fly scale count 0`) — prevents the poller or any user action from writing stale data to Sheets during the transform
-3. Run `migrate_category_split.py` to transform the Google Sheets column in-place — splits `category` into `ownership` + `asset_status`, rewrites the sheet with new headers
-4. Delete `assets.db` from the Fly.io volume (`fly ssh console`)
-5. Deploy updated code (schema, sync mapping, status logic, API, frontend) — this brings the app back up
-6. On startup, `count_assets() == 0` triggers `_initial_sync()` — DB is rebuilt fresh from the transformed sheet
+1. **Dry run first** — run `migrate_category_split.py` (no flags) against a copy of the sheet to print every row's transformation without writing anything. Review for unrecognized category values before proceeding.
+2. Run `migrate_category_split.py --execute` to transform Google Sheets in-place — splits `category` into `ownership` + `asset_status`, rewrites the sheet with new headers.
+3. Update `GOOGLE_SHEET_ID` in Fly secrets (`fly secrets set GOOGLE_SHEET_ID=<id>`) if pointing at a new sheet. This triggers a rolling restart of the existing machine — do NOT use `fly scale count 0`, which destroys the machine and causes deployment issues.
+4. Deploy updated code — `fly deploy` rolls new code onto the running machine in-place.
+5. After deploy, delete the DB and cache via SSH using a Python one-liner (shell commands do not work over Fly SSH):
+   ```
+   fly ssh console -a <app> --command "python3 -c \"import os; [os.remove(f) for f in ['/data/assets.db', '/data/last_poll_cache.json'] if os.path.exists(f)]; print('done')\""
+   ```
+6. Seed the DB by calling `init_db()` then `force_sync_from_sheets()` directly over SSH before restarting, to avoid a gunicorn fork/thread deadlock on first boot with an empty DB:
+   ```
+   fly ssh console -a <app> --command "python3 -c \"import sys; sys.path.insert(0,'/app'); from models import init_db; init_db(); from sync.poller import force_sync_from_sheets; n = force_sync_from_sheets(); print(f'{n} rows synced')\""
+   ```
+7. Restart the machine (`fly machine restart <id>`) — gunicorn boots cleanly against the already-populated DB and health checks pass.
 
-Sheets is the source of truth, so deleting and rebuilding the DB is safe. Total downtime (steps 2–5) is the script runtime plus deploy time (~1–2 minutes).
-
-The same migration script can be reused for the production sheet conversion by pointing it at a different sheet ID.
+Sheets is the source of truth, so deleting and rebuilding the DB is safe. Do not scale to 0 at any point — it is unnecessary and breaks the SSH-based DB reset in step 5.
 
 ---
 
@@ -109,6 +114,7 @@ The `assigned_to` magic string is preserved as-is for now — cleaning that up i
 | Date | Author | Change |
 |------|--------|--------|
 | 2026-03-23 | Ethan Davey, Victoria | Reviewed ownership values with Victoria. Split `Lease` into `Lease-Temp` and `Lease-Own` — the old category names map directly to these. `Lease - Returned` ownership left blank (ambiguous, requires manual review). Renamed `asset_status` value `Temp` → `Assigned` for clarity. |
+| 2026-03-23 | Ethan Davey, Claude Code | Corrected Migration Strategy steps based on what actually worked in practice: removed `fly scale count 0` (destroys machine, breaks SSH reset), added SSH Python one-liner for DB deletion, added pre-restart DB seed step to avoid gunicorn fork/thread deadlock on empty DB. |
 
 ---
 

@@ -107,7 +107,7 @@ def derive_status(row):
     if asset_status == 'Historical' and assigned_to and assigned_to.lower() != 'ready to assign':
         return 'Historical'
 
-    if asset_status == 'Temp' and assigned_to and assigned_to.lower() != 'ready to assign':
+    if asset_status == 'Assigned' and assigned_to and assigned_to.lower() != 'ready to assign':
         if returned:
             return 'Historical'
         return 'Checked Out'

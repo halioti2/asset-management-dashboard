@@ -1,8 +1,8 @@
 import { useState } from 'react'
 import { addAsset } from '../../api/assets'
 
-const OWNERSHIP_TYPES = ['Purchased', 'Lease', 'Donated', 'Returned']
-const ASSET_STATUSES = ['Temp', 'Historical', 'Unusable', 'Ready to Assign']
+const OWNERSHIP_TYPES = ['Purchased', 'Lease-Temp', 'Lease-Own', 'Donated', 'Returned']
+const ASSET_STATUSES = ['Assigned', 'Historical', 'Unusable', 'Ready to Assign']
 const TYPES = ['Laptop', 'Chromebook', 'Tablet', 'Hotspot', 'Other']
 
 export default function AddLaptopForm({ onSuccess, onClose }) {
