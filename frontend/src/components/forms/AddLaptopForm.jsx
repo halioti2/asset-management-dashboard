@@ -1,11 +1,12 @@
 import { useState } from 'react'
 import { addAsset } from '../../api/assets'
 
-const CATEGORIES = ['Lease Temp', 'Staff', 'Loaner', 'Other']
+const OWNERSHIP_TYPES = ['Purchased', 'Lease', 'Donated', 'Returned']
+const ASSET_STATUSES = ['Temp', 'Historical', 'Unusable', 'Ready to Assign']
 const TYPES = ['Laptop', 'Chromebook', 'Tablet', 'Hotspot', 'Other']
 
 export default function AddLaptopForm({ onSuccess, onClose }) {
-  const [form, setForm] = useState({ type: '', serial_number: '', category: '', label: '', date_assigned: '', lease_end_date: '', notes: '' })
+  const [form, setForm] = useState({ type: '', serial_number: '', ownership: '', asset_status: '', label: '', date_assigned: '', lease_end_date: '', notes: '' })
   const [error, setError] = useState({})
   const [submitting, setSubmitting] = useState(false)
   const [apiError, setApiError] = useState('')
@@ -16,7 +17,8 @@ export default function AddLaptopForm({ onSuccess, onClose }) {
     const e = {}
     if (!form.type.trim()) e.type = 'Required'
     if (!form.serial_number.trim()) e.serial_number = 'Required'
-    if (!form.category.trim()) e.category = 'Required'
+    if (!form.ownership.trim()) e.ownership = 'Required'
+    if (!form.asset_status.trim()) e.asset_status = 'Required'
     return e
   }
 
@@ -53,10 +55,16 @@ export default function AddLaptopForm({ onSuccess, onClose }) {
         <Field label="Serial # *" error={error.serial_number}>
           <input value={form.serial_number} onChange={e => set('serial_number', e.target.value)} className={inp(error.serial_number)} placeholder="SN123456" />
         </Field>
-        <Field label="Category *" error={error.category}>
-          <select value={form.category} onChange={e => set('category', e.target.value)} className={sel(error.category)}>
-            <option value="">Select category…</option>
-            {CATEGORIES.map(c => <option key={c}>{c}</option>)}
+        <Field label="Ownership *" error={error.ownership}>
+          <select value={form.ownership} onChange={e => set('ownership', e.target.value)} className={sel(error.ownership)}>
+            <option value="">Select ownership…</option>
+            {OWNERSHIP_TYPES.map(o => <option key={o}>{o}</option>)}
+          </select>
+        </Field>
+        <Field label="Asset Status *" error={error.asset_status}>
+          <select value={form.asset_status} onChange={e => set('asset_status', e.target.value)} className={sel(error.asset_status)}>
+            <option value="">Select status…</option>
+            {ASSET_STATUSES.map(s => <option key={s}>{s}</option>)}
           </select>
         </Field>
         <Field label="Label">

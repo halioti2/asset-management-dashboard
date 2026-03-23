@@ -24,7 +24,8 @@ _TABLE_DDL = """
         type TEXT NOT NULL,
         serial_number TEXT NOT NULL,
         sheets_row INTEGER,
-        category TEXT NOT NULL,
+        ownership TEXT,
+        asset_status TEXT,
         date_assigned TEXT,
         lease_end_date TEXT,
         assigned_to TEXT,
@@ -69,6 +70,22 @@ def init_db():
             DROP TABLE assets_v1;
         """)
         logger.info("DB migration complete")
+        cols = [row[1] for row in conn.execute("PRAGMA table_info(assets)").fetchall()]
+
+    if 'category' in cols and 'ownership' not in cols:
+        logger.info("DB migration: replacing category with ownership + asset_status")
+        conn.executescript(f"""
+            ALTER TABLE assets RENAME TO assets_v2;
+            {_TABLE_DDL}
+            INSERT INTO assets
+                (id, label, type, serial_number, sheets_row, date_assigned,
+                 lease_end_date, assigned_to, email, phone, notes, returned, last_updated)
+            SELECT id, label, type, serial_number, sheets_row, date_assigned,
+                   lease_end_date, assigned_to, email, phone, notes, returned, last_updated
+            FROM assets_v2;
+            DROP TABLE assets_v2;
+        """)
+        logger.info("DB migration complete — ownership/asset_status will populate on next sync")
 
     conn.executescript(_INDEX_DDL)
     conn.commit()
@@ -78,7 +95,7 @@ def init_db():
 def derive_status(row):
     """Derive status from asset fields — pure function."""
     notes = (row['notes'] or '').lower()
-    category = (row['category'] or '').strip()
+    asset_status = (row['asset_status'] or '').strip()
     assigned_to = (row['assigned_to'] or '').strip()
     returned = row['returned'] or ''
 
@@ -87,16 +104,15 @@ def derive_status(row):
         if keyword in notes:
             return 'Locked'
 
-    if category == 'Lease - Returned' and assigned_to and assigned_to.lower() != 'ready to assign':
+    if asset_status == 'Historical' and assigned_to and assigned_to.lower() != 'ready to assign':
         return 'Historical'
 
-    if category == 'Lease (Temp)' and assigned_to and assigned_to.lower() != 'ready to assign':
+    if asset_status == 'Temp' and assigned_to and assigned_to.lower() != 'ready to assign':
         if returned:
             return 'Historical'
-        else:
-            return 'Checked Out'
+        return 'Checked Out'
 
-    if assigned_to.lower() == 'ready to assign':
+    if asset_status == 'Ready to Assign' and assigned_to.lower() == 'ready to assign':
         return 'Not Assigned'
 
     return 'Uncategorized'
@@ -144,15 +160,16 @@ def insert_asset(data):
     now = datetime.utcnow().isoformat()
     cursor = conn.execute("""
         INSERT INTO assets
-            (label, type, serial_number, sheets_row, category, date_assigned, lease_end_date,
-             assigned_to, email, phone, notes, returned, last_updated)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            (label, type, serial_number, sheets_row, ownership, asset_status, date_assigned,
+             lease_end_date, assigned_to, email, phone, notes, returned, last_updated)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     """, (
         data.get('label', ''),
         data['type'],
         data['serial_number'],
         data.get('sheets_row'),
-        data['category'],
+        data.get('ownership', ''),
+        data.get('asset_status', ''),
         data.get('date_assigned', ''),
         data.get('lease_end_date', ''),
         data.get('assigned_to', ''),

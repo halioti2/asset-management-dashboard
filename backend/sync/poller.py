@@ -10,6 +10,7 @@ Conflict rules:
 import json
 import logging
 import os
+import resource
 from datetime import datetime
 
 from sync.sheets import read_all_rows, write_row
@@ -21,7 +22,7 @@ CACHE_PATH = os.path.join(os.getenv('DATA_DIR', os.path.dirname(__file__)), 'las
 
 # Fields used for change-detection (exclude id/status which are derived)
 COMPARE_FIELDS = [
-    'label', 'type', 'serial_number', 'category', 'date_assigned',
+    'label', 'type', 'serial_number', 'ownership', 'asset_status', 'date_assigned',
     'lease_end_date', 'assigned_to', 'email', 'phone', 'notes',
     'returned',
 ]
@@ -94,7 +95,8 @@ def run_poll():
     """Execute one poll cycle. Called by APScheduler every 3 minutes.
     Each row is identified by its Sheets row index, not serial number,
     so multiple rows per serial (historical checkouts) are handled correctly."""
-    logger.info("poller: starting poll cycle")
+    mb = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss / 1024
+    logger.info(f"poller: starting poll cycle — rss={mb:.1f}MB")
     try:
         cache = _load_cache()
         sheets_rows = read_all_rows()
@@ -132,6 +134,7 @@ def run_poll():
                         logger.error(f"poller: failed to write {serial!r} row {row_key} to sheets: {e}")
 
         _save_cache(new_cache)
-        logger.info(f"poller: poll cycle complete — processed {len(sheets_rows)} rows")
+        mb = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss / 1024
+        logger.info(f"poller: poll cycle complete — processed {len(sheets_rows)} rows, rss={mb:.1f}MB")
     except Exception as e:
         logger.error(f"poller: poll cycle failed: {e}", exc_info=True)

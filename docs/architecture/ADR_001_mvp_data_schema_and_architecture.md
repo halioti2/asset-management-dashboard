@@ -30,31 +30,32 @@ The original Google Sheets data model does not fully match the UI requirements f
 
 ## Data Schema
 
-### Google Sheets Columns (current state - minimal updates needed)
+### Google Sheets Columns (current state)
 
 | Column | Type | Required | Notes |
 |--------|------|----------|-------|
-| Label | Text | Yes | Equipment identifier (e.g., "MacBook Air #1") |
+| Label | Text | No | Equipment identifier (e.g., "MacBook Air #1") |
 | Type | Text | Yes | Equipment type (dropdown: MacBook Air, MacBook Pro, Dell XPS, iPad, etc.) |
-| Serial # | Text | Yes | Unique serial number |
-| Category | Text | Yes | Category (dropdown: Laptop, iPad, Other) |
-| Date Assigned | Date | Yes | When equipment was first assigned to inventory |
-| Lease End Date | Date | Yes | When the lease expires |
-| Assigned To | Text | No | Current person assigned to equipment |
+| Assigned To | Text | No | Current borrower name |
 | Email | Text | No | Email of student/borrower |
 | Phone | Text | No | Phone number of student/borrower |
+| Serial # | Text | Yes | Identifies the physical device; multiple rows per serial allowed (one per checkout event) |
+| Date Assigned | Date | No | When added to inventory |
+| Ownership | Text | No | `Purchased` / `Lease` / `Donated` / `Returned` — how Pursuit acquired or disposed of the device |
+| Asset Status | Text | No | `Temp` / `Historical` / `Unusable` / `Ready to Assign` — device's current state in the checkout lifecycle |
+| Lease End Date | Date | No | Apple lease expiry |
 | Notes | Text | No | Multi-purpose notes (condition, setup, lock reasons, misc) |
-| Returned | Date | No | When equipment was actually returned (marks historical record) |
+| Returned | Date | No | When equipment was returned (empty = active checkout) |
 | Last Updated | DateTime | System | Timestamp of last edit (tracked but not displayed in UI) |
 
 ### Derived Fields (calculated on-the-fly, not stored)
 
-**Status:** Determined by the following rules:
-- **Locked**: Notes contains lock keyword (checked first)
-- **Historical**: Category = "Lease - Returned" OR (Category = "Lease (Temp)" AND Assigned To set AND Assigned To ≠ "ready to assign" AND Returned filled)
-- **Checked Out**: Category = "Lease (Temp)" AND Assigned To set AND Assigned To ≠ "ready to assign" AND Returned empty
-- **Not Assigned**: Assigned To = "ready to assign" (explicit signal — see ADR 001 Addendum below)
-- **Uncategorized**: All other rows (no matching rule — see ADR 001 Addendum below)
+**Status:** Determined by the following rules (evaluated top to bottom, first match wins):
+- **Locked**: notes contains lock keyword (checked first)
+- **Historical**: asset_status = "Historical" AND assigned_to set AND assigned_to ≠ "ready to assign"
+- **Checked Out**: asset_status = "Temp" AND assigned_to set AND assigned_to ≠ "ready to assign" AND returned empty
+- **Not Assigned**: asset_status = "Ready to Assign" AND assigned_to = "ready to assign" (both required — see ADR 001 Addendum below)
+- **Uncategorized**: No rule matched (see ADR 001 Addendum below)
 
 ---
 
@@ -72,9 +73,16 @@ The original rule: `Not Assigned = returned empty AND (assigned_to empty OR assi
 
 The original fallthrough approach caused edge cases from real Sheets data (unusual category values, partial rows, legacy formats) to appear as "Not Assigned" in the filter, making the filter unreliable. Using `"ready to assign"` as an explicit marker is consistent with how the spreadsheet was already being managed and gives the filter a single, trustworthy source of truth.
 
+### Critical Rule: Empty `assigned_to` is NOT "ready to assign"
+
+A blank or null `assigned_to` column means **unknown** — the device's status cannot be determined from data alone. It must **not** be treated as "ready to assign" in any logic, script, or migration. Only the explicit string `"ready to assign"` (case-insensitive) qualifies a record as Not Assigned.
+
+Incorrect interpretation of this rule caused a migration bug (see ADR 003) where 26 devices with blank `assigned_to` were mislabeled as `Ready to Assign`.
+
 ### Consequences
 
 - Rows that don't match any rule surface as "Uncategorized" — visible and filterable, not hidden
+- A blank `assigned_to` on a `Lease (Temp)` or other active-category row is a data quality gap, not a status — it should surface as Uncategorized and be investigated
 - The Return flow must set `assigned_to = "ready to assign"` on the new record it creates so it appears correctly as Not Assigned
 - The Checkout validation (`derive_status != 'Not Assigned'`) continues to work unchanged — only rows explicitly marked "ready to assign" are eligible for checkout
 
@@ -85,26 +93,30 @@ The original fallthrough approach caused edge cases from real Sheets data (unusu
 ### SQLite Schema
 
 ```sql
-CREATE TABLE assets (
+CREATE TABLE IF NOT EXISTS assets (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
-  label TEXT NOT NULL,
+  label TEXT,
   type TEXT NOT NULL,
-  serial_number TEXT UNIQUE NOT NULL,
-  category TEXT NOT NULL,
-  date_assigned DATE NOT NULL,
-  lease_end_date DATE NOT NULL,
+  serial_number TEXT NOT NULL,
+  sheets_row INTEGER,
+  ownership TEXT,
+  asset_status TEXT,
+  date_assigned TEXT,
+  lease_end_date TEXT,
   assigned_to TEXT,
   email TEXT,
   phone TEXT,
   notes TEXT,
-  returned DATE,
-  last_updated DATETIME DEFAULT CURRENT_TIMESTAMP
+  returned TEXT,
+  last_updated TEXT DEFAULT (datetime('now'))
 );
 
-CREATE INDEX idx_assigned_to ON assets(assigned_to);
-CREATE INDEX idx_status ON assets(returned, assigned_to);
-CREATE INDEX idx_lease_end_date ON assets(lease_end_date);
-CREATE INDEX idx_type ON assets(type);
+CREATE INDEX IF NOT EXISTS idx_assigned_to ON assets(assigned_to);
+CREATE INDEX IF NOT EXISTS idx_returned_assigned ON assets(returned, assigned_to);
+CREATE INDEX IF NOT EXISTS idx_lease_end_date ON assets(lease_end_date);
+CREATE INDEX IF NOT EXISTS idx_type ON assets(type);
+CREATE INDEX IF NOT EXISTS idx_serial ON assets(serial_number);
+CREATE INDEX IF NOT EXISTS idx_sheets_row ON assets(sheets_row);
 ```
 
 ---

@@ -56,7 +56,7 @@ Clicking an action button opens a form panel in the top section above the table.
 
 ## Data Model
 
-### Original Google Sheets Columns (pre-app)
+### Original Google Sheets Columns (pre-app DO NOT MODIFY)
 
 The Distribution Tracker sheet as it existed before app integration — no Email, Phone, or Last Updated columns.
 
@@ -90,7 +90,8 @@ The Distribution Tracker sheet as it existed before app integration — no Email
 | label | text | No | Equipment label (e.g. "MacBook Air #1") |
 | type | text | Yes | MacBook Air, MacBook Pro, Dell XPS, iPad, etc. |
 | serial_number | text | Yes | Identifies the physical device; multiple records per serial allowed (one per checkout event) |
-| category | text | Yes | Purchased (Apple), Lease (Temp), etc. |
+| ownership | text | Yes | `Purchased` / `Lease` / `Donated` / `Returned` — how Pursuit acquired or disposed of the device |
+| asset_status | text | Yes | `Temp` / `Historical` / `Unusable` / `Ready to Assign` — device's current state in the checkout lifecycle |
 | date_assigned | date | Yes | When added to inventory |
 | lease_end_date | date | No | Apple lease expiry |
 | assigned_to | text | No | Current borrower name |
@@ -101,18 +102,17 @@ The Distribution Tracker sheet as it existed before app integration — no Email
 | last_updated | datetime | System | Auto-updated on every write, not displayed |
 | sheets_row | integer | System | Sheets row index for this record; used as sync key to map SQLite rows to Sheets rows, not displayed |
 
-### Derived Status (not stored)
+### SQLite / Google Sheets Derived Status (not stored)
 
 | Status | Condition |
 |--------|-----------|
 | Locked | notes contains lock keyword (evaluated first) |
-| Historical | Category = "Lease (Temp)" AND assigned_to set AND assigned_to ≠ "ready to assign" AND returned filled |
-| Historical | Category = "Lease - Returned" AND assigned_to set AND assigned_to ≠ "ready to assign" (legacy category implies returned) |
-| Checked Out | Category = "Lease (Temp)" AND assigned_to set AND assigned_to ≠ "ready to assign" AND returned empty |
-| Not Assigned | assigned_to = "ready to assign" (explicit signal — see ADR 001 Addendum) |
+| Historical | asset_status = "Historical" AND assigned_to set AND assigned_to ≠ "ready to assign" |
+| Checked Out | asset_status = "Temp" AND assigned_to set AND assigned_to ≠ "ready to assign" AND returned empty |
+| Not Assigned | asset_status = "Ready to Assign" AND assigned_to = "ready to assign" |
 | Uncategorized | No rule matched — row has unusual/partial data from Sheets |
 
-> **Note:** "Not Assigned" was previously a fallthrough (anything not Locked/Historical/Checked Out). It is now an explicit check on `assigned_to = "ready to assign"`. The Return flow sets `assigned_to = "ready to assign"` on the new record it creates. See ADR 001 Addendum for full rationale.
+> **Note:** "Not Assigned" requires both `asset_status = "Ready to Assign"` and `assigned_to = "ready to assign"`. The Return flow sets both fields on the new record it creates. See ADR 001 Addendum and ADR 003 for full rationale.
 
 ---
 
@@ -139,9 +139,12 @@ Admin assigns a laptop to a student.
 - Lease End Date (from selected row, Apple lease date)
 
 **On submit:**
-- Writes to existing targeted record: assigned_to, email, phone, last_updated
+- Writes to existing targeted record: assigned_to, email, phone, asset_status = "Temp", last_updated
 - Status derives to: "Checked Out"
-- Validation: all required fields filled, laptop must be Not Assigned
+- Validation:
+  - All required fields filled
+  - Laptop must have status "Not Assigned"
+  - assigned_to cannot be the literal string "ready to assign"
 
 ---
 
@@ -165,7 +168,7 @@ Admin processes a returned laptop and notes condition.
 
 **On submit:**
 1. Updates the existing Checked Out record: notes (appended), returned = today, last_updated → status derives to "Historical"
-2. Creates a new record for the same device copying: label, type, serial_number, category, date_assigned, lease_end_date — leaving assigned_to, email, phone, notes, returned empty → status derives to "Not Assigned"
+2. Creates a new record for the same device copying: label, type, serial_number, ownership, date_assigned, lease_end_date — sets asset_status = "Ready to Assign" and assigned_to = "ready to assign", leaving email, phone, notes, returned empty → status derives to "Not Assigned"
 3. New record is appended as a new row in Google Sheets
 - Validation: laptop must be Checked Out
 
@@ -181,7 +184,8 @@ Admin adds new equipment to inventory.
 - Label (text, optional)
 - Type (dropdown, required)
 - Serial # (text, required)
-- Category (dropdown, required)
+- Ownership (dropdown, required) — `Purchased` / `Lease` / `Donated` / `Returned`
+- Asset Status (dropdown, required) — `Temp` / `Historical` / `Unusable` / `Ready to Assign`
 - Date Assigned (date picker, required)
 - Lease End Date (date picker, optional)
 - Notes (textarea, optional — setup notes)

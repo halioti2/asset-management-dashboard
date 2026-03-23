@@ -60,22 +60,14 @@ def create_app():
         logger.info("Reloader parent process — skipping Sheets sync and scheduler")
         return app
 
-    # Ensure sheet has correct headers (adds Email, Phone, Last Updated if missing)
-    try:
-        from sync.sheets import ensure_schema
-        ensure_schema()
-    except Exception as e:
-        logger.error(f"ensure_schema failed: {e}", exc_info=True)
-
-    # Initial sync: populate DB from Sheets if empty
-    _initial_sync()
-
     # Start background poller — runs immediately on startup, then every 3 minutes.
-    # Running immediately ensures any Sheets changes made while the server was
-    # down are picked up before serving the first request.
+    # The immediate first run handles initial sync (if DB is empty) and picks up
+    # any Sheets changes made while the server was down.
+    # Running in a background thread means create_app() returns immediately and
+    # health checks pass before the first Sheets API call completes.
     scheduler = BackgroundScheduler()
     scheduler.add_job(
-        func=_poll_job,
+        func=_startup_job,
         trigger='interval',
         minutes=3,
         id='sheets_poller',
@@ -88,27 +80,19 @@ def create_app():
     return app
 
 
-def _initial_sync():
-    """On startup: if DB is empty, pull all rows from Sheets."""
+def _startup_job():
+    """Run on startup and every 3 minutes. On first run, seeds DB if empty."""
     try:
         if count_assets() == 0:
             logger.info("DB is empty — running initial sync from Google Sheets...")
-            from sync.sheets import read_all_rows
-            from models import upsert_asset_from_sheets
-            rows = read_all_rows()
-            for row in rows:
-                if row.get('serial_number'):
-                    upsert_asset_from_sheets(row)
-            logger.info(f"Initial sync complete: {len(rows)} rows imported")
+            from sync.poller import force_sync_from_sheets
+            count = force_sync_from_sheets()
+            logger.info(f"Initial sync complete: {count} rows imported")
         else:
-            logger.info(f"DB already has {count_assets()} assets, skipping initial sync")
+            from sync.poller import run_poll
+            run_poll()
     except Exception as e:
-        logger.error(f"Initial sync failed: {e}", exc_info=True)
-
-
-def _poll_job():
-    from sync.poller import run_poll
-    run_poll()
+        logger.error(f"Startup job failed: {e}", exc_info=True)
 
 
 if __name__ == '__main__':

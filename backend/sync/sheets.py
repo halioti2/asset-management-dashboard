@@ -1,6 +1,7 @@
 import os
 import json
 import logging
+import threading
 from dotenv import load_dotenv
 from google.oauth2.service_account import Credentials
 from googleapiclient.discovery import build
@@ -21,7 +22,8 @@ DESIRED_HEADERS = [
     'Phone',
     'Serial #',
     'Date Assigned',
-    'Category',
+    'Ownership',
+    'Asset Status',
     'Lease End Date',
     'Notes',
     'Returned',
@@ -36,7 +38,8 @@ HEADER_TO_FIELD = {
     'Phone':          'phone',
     'Serial #':       'serial_number',
     'Date Assigned':  'date_assigned',
-    'Category':       'category',
+    'Ownership':      'ownership',
+    'Asset Status':   'asset_status',
     'Lease End Date': 'lease_end_date',
     'Notes':          'notes',
     'Returned':       'returned',
@@ -52,13 +55,19 @@ def _get_sheet_id():
     return sheet_id
 
 
+_thread_local = threading.local()
+
+
 def get_service():
-    creds_json = os.getenv('GOOGLE_SHEETS_CREDENTIALS')
-    if not creds_json:
-        raise ValueError("GOOGLE_SHEETS_CREDENTIALS not set in .env")
-    creds_dict = json.loads(creds_json)
-    credentials = Credentials.from_service_account_info(creds_dict, scopes=SCOPES)
-    return build('sheets', 'v4', credentials=credentials)
+    """Return a thread-local cached Sheets service. Builds once per thread."""
+    if not getattr(_thread_local, 'service', None):
+        creds_json = os.getenv('GOOGLE_SHEETS_CREDENTIALS')
+        if not creds_json:
+            raise ValueError("GOOGLE_SHEETS_CREDENTIALS not set in .env")
+        creds_dict = json.loads(creds_json)
+        credentials = Credentials.from_service_account_info(creds_dict, scopes=SCOPES)
+        _thread_local.service = build('sheets', 'v4', credentials=credentials)
+    return _thread_local.service
 
 
 def _read_all_values(service, sheet_id):

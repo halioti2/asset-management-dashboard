@@ -9,7 +9,13 @@ export default function CheckOutForm({ selectedAsset, onSuccess, onClose }) {
 
   useEffect(() => {
     if (selectedAsset) {
-      setForm(f => ({ ...f, assigned_to: selectedAsset.assigned_to || '', email: selectedAsset.email || '', phone: selectedAsset.phone || '' }))
+      const currentAssignedTo = selectedAsset.assigned_to || ''
+      setForm(f => ({
+        ...f,
+        assigned_to: currentAssignedTo.toLowerCase() === 'ready to assign' ? '' : currentAssignedTo,
+        email: selectedAsset.email || '',
+        phone: selectedAsset.phone || '',
+      }))
     }
   }, [selectedAsset])
 

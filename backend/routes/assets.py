@@ -68,10 +68,14 @@ def list_assets():
 @bp.route('', methods=['POST'])
 def add_asset():
     body = request.get_json(force=True) or {}
-    required = ['type', 'serial_number', 'category']
+    required = ['type', 'serial_number', 'ownership', 'asset_status']
     missing = [f for f in required if not body.get(f, '').strip()]
     if missing:
         return _error(f"Missing required fields: {', '.join(missing)}")
+
+    # "Ready to Assign" requires assigned_to = "ready to assign" for derive_status to work
+    if body.get('asset_status', '').strip() == 'Ready to Assign':
+        body['assigned_to'] = 'ready to assign'
 
     asset = insert_asset(body)
     _queue_sheets_append(asset)
@@ -93,11 +97,14 @@ def checkout_asset(asset_id):
     missing = [f for f in required if not body.get(f, '').strip()]
     if missing:
         return _error(f"Missing required fields: {', '.join(missing)}")
+    if body['assigned_to'].strip().lower() == 'ready to assign':
+        return _error("'assigned_to' cannot be 'ready to assign' — enter the borrower's name")
 
     updated = update_asset(asset_id, {
         'assigned_to': body['assigned_to'].strip(),
         'email': body['email'].strip(),
         'phone': body['phone'].strip(),
+        'asset_status': 'Temp',
     })
     _queue_sheets_write(updated)
     return jsonify(updated)
@@ -136,7 +143,8 @@ def return_asset(asset_id):
         'label': asset.get('label', ''),
         'type': asset.get('type', ''),
         'serial_number': asset.get('serial_number', ''),
-        'category': asset.get('category', ''),
+        'ownership': asset.get('ownership', ''),
+        'asset_status': 'Ready to Assign',
         'date_assigned': asset.get('date_assigned', ''),
         'lease_end_date': asset.get('lease_end_date', ''),
         'assigned_to': 'ready to assign',
