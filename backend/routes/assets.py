@@ -1,4 +1,4 @@
-from datetime import date
+from datetime import date, datetime
 from flask import Blueprint, request, jsonify
 from models import (
     get_all_assets, get_asset_by_id, insert_asset, update_asset,
@@ -6,6 +6,7 @@ from models import (
 )
 from sync.sheets import write_row, append_row
 from sync.poller import update_cache_for_row
+from sync.simplemdm import lookup_device, lock_device, wipe_device
 
 bp = Blueprint('assets', __name__, url_prefix='/api/assets')
 
@@ -154,7 +155,34 @@ def return_asset(asset_id):
     return jsonify(updated)
 
 
-# ── PATCH /api/assets/:id/lock  (J4) ──────────────────────────────────────────
+# ── GET /api/assets/:id/mdm-status  (SimpleMDM lookup) ───────────────────────
+
+@bp.route('/<int:asset_id>/mdm-status', methods=['GET'])
+def mdm_status(asset_id):
+    asset = get_asset_by_id(asset_id)
+    if not asset:
+        return _error('Asset not found', 404)
+    try:
+        device = lookup_device(asset['serial_number'])
+        if not device:
+            return jsonify({'found': False, 'serial_number': asset['serial_number']})
+        return jsonify({
+            'found': True,
+            'device_id': device['id'],
+            'name': device['name'],
+            'serial_number': device['serial_number'],
+            'status': device['status'],
+            'model': device['model'],
+            'enrolled': device['status'] == 'enrolled',
+            'asset_status': asset.get('asset_status', ''),
+            'ownership': asset.get('ownership', ''),
+            'derived_status': derive_status(asset),
+        })
+    except Exception as e:
+        return _error(str(e), 500)
+
+
+# ── PATCH /api/assets/:id/lock  (J4 — SimpleMDM lock) ───────────────────────
 
 @bp.route('/<int:asset_id>/lock', methods=['PATCH'])
 def lock_asset(asset_id):
@@ -163,15 +191,81 @@ def lock_asset(asset_id):
         return _error('Asset not found', 404)
 
     body = request.get_json(force=True) or {}
+    pin = body.get('pin', '').strip()
+    message = body.get('message', '').strip()
     reason = body.get('notes', '').strip()
 
-    from datetime import datetime
+    # Look up device in SimpleMDM
+    device = lookup_device(asset['serial_number'])
+    if not device:
+        return _error(f"Cannot lock: serial {asset['serial_number']} not found in SimpleMDM. Verify the serial is correct.", 404)
+
+    # Send lock command
+    try:
+        lock_device(device['id'], pin=pin or None, message=message or None)
+    except Exception as e:
+        return _error(f"Lock command failed: {e}", 502)
+
+    # Update notes in DB
     timestamp = datetime.utcnow().strftime('%Y-%m-%d %H:%M')
-    lock_entry = f"[locked] {timestamp}" + (f": {reason}" if reason else "")
+    lock_entry = f"[locked] {timestamp} — Lock command sent via MDM"
+    if reason:
+        lock_entry += f": {reason}"
 
     existing_notes = asset.get('notes', '') or ''
     separator = '\n' if existing_notes else ''
     new_notes = f"{existing_notes}{separator}{lock_entry}"
+
+    updated = update_asset(asset_id, {'notes': new_notes})
+    _queue_sheets_write(updated)
+    return jsonify(updated)
+
+
+# ── POST /api/assets/:id/wipe  (SimpleMDM wipe) ─────────────────────────────
+
+@bp.route('/<int:asset_id>/wipe', methods=['POST'])
+def wipe_asset(asset_id):
+    asset = get_asset_by_id(asset_id)
+    if not asset:
+        return _error('Asset not found', 404)
+
+    body = request.get_json(force=True) or {}
+    confirm_serial = body.get('confirm_serial', '').strip()
+
+    # Safety: confirm serial must match
+    if confirm_serial.upper() != asset['serial_number'].upper():
+        return _error('Serial number does not match. Re-enter to confirm.')
+
+    # Safety: ownership must not be Donated
+    ownership = (asset.get('ownership') or '').strip()
+    if ownership.lower() == 'donated':
+        return _error('Cannot wipe: this device is marked as "Donated" and is no longer managed.')
+
+    # Safety: status check — block Historical only
+    status = derive_status(asset)
+    if status == 'Historical':
+        return _error('Cannot wipe: this is a historical record. Select the current record for this device.')
+    if status == 'Uncategorized':
+        return _error('Cannot wipe: device status is unclear. Update ownership/status first.')
+
+    # Look up device in SimpleMDM
+    device = lookup_device(asset['serial_number'])
+    if not device:
+        return _error(f'Cannot wipe: serial {asset["serial_number"]} not found in SimpleMDM. Verify the serial is correct.', 404)
+
+    # Send wipe command
+    try:
+        wipe_device(device['id'])
+    except Exception as e:
+        return _error(str(e), 502)
+
+    # Update DB: set status indicator + note
+    timestamp = datetime.utcnow().strftime('%Y-%m-%d %H:%M')
+    wipe_entry = f"[locked] {timestamp} — Wipe command sent via MDM"
+
+    existing_notes = asset.get('notes', '') or ''
+    separator = '\n' if existing_notes else ''
+    new_notes = f"{existing_notes}{separator}{wipe_entry}"
 
     updated = update_asset(asset_id, {'notes': new_notes})
     _queue_sheets_write(updated)

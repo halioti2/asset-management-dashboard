@@ -2,7 +2,8 @@ const ACTIONS = [
   { id: 'checkout', label: 'Check Out', color: 'bg-blue-600 hover:bg-blue-700' },
   { id: 'return',   label: 'Return',    color: 'bg-green-600 hover:bg-green-700' },
   { id: 'add',      label: 'Add Laptop', color: 'bg-indigo-600 hover:bg-indigo-700' },
-  { id: 'lock',     label: 'Lock',      color: 'bg-red-600 hover:bg-red-700' },
+  { id: 'lock',     label: 'Lock',      color: 'bg-orange-600 hover:bg-orange-700' },
+  { id: 'wipe',     label: 'Wipe',      color: 'bg-red-600 hover:bg-red-700' },
   { id: 'notes',    label: 'Update Notes', color: 'bg-amber-600 hover:bg-amber-700' },
 ]
 

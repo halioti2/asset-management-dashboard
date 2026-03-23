@@ -12,5 +12,9 @@ export const returnAsset = (id, data) => api.patch(`/assets/${id}/return`, data)
 
 export const lockAsset = (id, data) => api.patch(`/assets/${id}/lock`, data).then(r => r.data)
 
+export const wipeAsset = (id, data) => api.post(`/assets/${id}/wipe`, data).then(r => r.data)
+
+export const getMdmStatus = (id) => api.get(`/assets/${id}/mdm-status`).then(r => r.data)
+
 export const bulkUpdateNotes = (ids, notes) =>
   api.patch('/assets/notes', { ids, notes }).then(r => r.data)

@@ -7,6 +7,7 @@ import CheckOutForm from './components/forms/CheckOutForm'
 import ReturnForm from './components/forms/ReturnForm'
 import AddLaptopForm from './components/forms/AddLaptopForm'
 import LockForm from './components/forms/LockForm'
+import WipeForm from './components/forms/WipeForm'
 import UpdateNotesForm from './components/forms/UpdateNotesForm'
 
 const EMPTY_FILTERS = { status: '', type: '', assigned_to: '', serial_number: '', label: '', lease_end_after: '', lease_end_before: '' }
@@ -127,6 +128,7 @@ export default function App() {
         {activeForm === 'return'   && <ReturnForm   selectedAsset={selectedAsset} {...formProps} />}
         {activeForm === 'add'      && <AddLaptopForm {...formProps} />}
         {activeForm === 'lock'     && <LockForm      selectedAsset={selectedAsset} {...formProps} />}
+        {activeForm === 'wipe'     && <WipeForm      selectedAsset={selectedAsset} {...formProps} />}
         {activeForm === 'notes'    && <UpdateNotesForm selectedIds={selectedIds} {...formProps} />}
 
         <FilterBar filters={filters} onChange={setFilters} />
