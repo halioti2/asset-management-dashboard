@@ -1,8 +1,9 @@
 # ADR 003: Split `category` into `ownership` and `asset_status`
 
-**Status:** Implemented
+**Status:** Amended
 **Date:** 2026-03-17
-**Participants:** Ethan Davey, Claude Code
+**Amended:** 2026-03-23
+**Participants:** Ethan Davey, Victoria, Claude Code
 
 ---
 
@@ -12,8 +13,8 @@ Replace the single `category` column (in both SQLite and Google Sheets) with two
 
 | Column | Values | Meaning |
 |--------|--------|---------|
-| `ownership` | `Purchased` / `Lease` / `Donated` / `Returned` | How Pursuit acquired (or disposed of) the device |
-| `asset_status` | `Temp` / `Historical` / `Unusable` / `Ready to Assign` | The device's current state in the checkout lifecycle |
+| `ownership` | `Purchased` / `Lease-Temp` / `Lease-Own` / `Donated` / `Returned` | How Pursuit acquired (or disposed of) the device |
+| `asset_status` | `Assigned` / `Historical` / `Unusable` / `Ready to Assign` | The device's current state in the checkout lifecycle |
 
 `asset_status` is the raw stored column. The existing derived `status` field (computed by `derive_status()` and returned by the API) remains unchanged in name.
 
@@ -67,9 +68,9 @@ The following mappings were confirmed by running a dry-run against the dev sheet
 
 | Old `category` | `ownership` | `asset_status` |
 |----------------|-------------|----------------|
-| `Lease (Temp)` | `Lease` | derived |
-| `Lease (Own)` | `Lease` | derived |
-| `Lease - Returned` | `Lease` | `Historical` |
+| `Lease (Temp)` | `Lease-Temp` | derived |
+| `Lease (Own)` | `Lease-Own` | derived |
+| `Lease - Returned` | *(blank)* | `Historical` |
 | `Purchased (Apple)` | `Purchased` | derived |
 | `Purchased (Dell)` | `Purchased` | derived |
 | `Donated` | `Donated` | derived |
@@ -78,14 +79,15 @@ The following mappings were confirmed by running a dry-run against the dev sheet
 
 **"Derived" asset_status logic** (applied to all rows marked "derived" above):
 - `returned` date is filled → `Historical`
-- `assigned_to` is set and ≠ "ready to assign" → `Temp`
+- `assigned_to` is set and ≠ "ready to assign" → `Assigned`
 - `assigned_to` = "ready to assign" → `Ready to Assign`
 - `assigned_to` is empty → **data quality gap** — the device has no confirmed status. Should be investigated and corrected manually; do NOT treat blank as "ready to assign"
 
 > **Known migration issue:** The initial run of `migrate_category_split.py` incorrectly treated empty `assigned_to` as `Ready to Assign`. This caused 26 rows to be mislabeled, including at least one confirmed checked-out device (J2JTGQCYNY / Andrew Tien). Those rows require manual review. The script has not been corrected because it is a one-time artifact, but any future reuse must fix this rule first.
 
 **Notes:**
-- `Lease (Own)` was an undocumented category in the sheet — permanent-ish lease assignments. Treated identically to `Lease (Temp)` for migration purposes.
+- `Lease (Own)` was an undocumented category in the sheet — permanent-ish lease assignments. Maps to `Lease-Own`.
+- `Lease - Returned` ownership is left blank — the original category cannot distinguish between Lease-Temp and Lease-Own, so these rows require manual review.
 - `Unusable` appeared as a category value but is semantically an `asset_status`. `ownership` is left blank for these 3 rows pending manual review.
 - The script flags any unrecognized category values in its dry-run output rather than silently dropping them.
 
@@ -99,6 +101,14 @@ When the Return flow creates the new "available" record, it must populate both f
 - `assigned_to = "ready to assign"`
 
 The `assigned_to` magic string is preserved as-is for now — cleaning that up is a separate future task. Both fields must be written together to keep `derive_status()` and the new `asset_status` column in sync.
+
+---
+
+## Changelog
+
+| Date | Author | Change |
+|------|--------|--------|
+| 2026-03-23 | Ethan Davey, Victoria | Reviewed ownership values with Victoria. Split `Lease` into `Lease-Temp` and `Lease-Own` — the old category names map directly to these. `Lease - Returned` ownership left blank (ambiguous, requires manual review). Renamed `asset_status` value `Temp` → `Assigned` for clarity. |
 
 ---
 
