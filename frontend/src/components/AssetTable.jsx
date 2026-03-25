@@ -8,6 +8,7 @@ const STATUS_STYLES = {
 const COLUMNS = [
   { key: 'label', label: 'Label' },
   { key: 'type', label: 'Type' },
+  { key: 'ownership', label: 'Ownership' },
   { key: 'serial_number', label: 'Serial #' },
   { key: 'status', label: 'Status' },
   { key: 'assigned_to', label: 'Assigned To' },
@@ -16,8 +17,70 @@ const COLUMNS = [
   { key: 'returned', label: 'Returned' },
 ]
 
-export default function AssetTable({ assets, selectedIds, onSelectionChange, onRowClick }) {
+const EMPTY_FILTERS = { status: '', type: '', ownership: '', assigned_to: '', serial_number: '', label: '', lease_end_after: '', lease_end_before: '' }
+
+const inputCls = "w-full rounded border border-gray-300 px-1.5 py-0.5 text-xs focus:outline-none focus:ring-1 focus:ring-blue-500"
+
+function FilterCell({ col, filters, set }) {
+  if (col.key === 'label') {
+    return <input type="text" placeholder="Search…" value={filters.label || ''} onChange={e => set('label', e.target.value)} className={inputCls} />
+  }
+  if (col.key === 'type') {
+    return (
+      <select value={filters.type || ''} onChange={e => set('type', e.target.value)} className={inputCls}>
+        <option value="">All</option>
+        <option>Laptop</option>
+        <option>Tablet</option>
+        <option>Chromebook</option>
+        <option>Hotspot</option>
+      </select>
+    )
+  }
+  if (col.key === 'ownership') {
+    return (
+      <select value={filters.ownership || ''} onChange={e => set('ownership', e.target.value)} className={inputCls}>
+        <option value="">All</option>
+        <option>Purchased</option>
+        <option>Lease-Temp</option>
+        <option>Lease-Own</option>
+        <option>Donated</option>
+        <option>Returned</option>
+      </select>
+    )
+  }
+  if (col.key === 'serial_number') {
+    return <input type="text" placeholder="Search…" value={filters.serial_number || ''} onChange={e => set('serial_number', e.target.value)} className={inputCls} />
+  }
+  if (col.key === 'status') {
+    return (
+      <select value={filters.status || ''} onChange={e => set('status', e.target.value)} className={inputCls}>
+        <option value="">All</option>
+        <option value="not_historical">All Laptops</option>
+        <option>Checked Out</option>
+        <option>Not Assigned</option>
+        <option>Historical</option>
+        <option>Locked</option>
+        <option>Uncategorized</option>
+      </select>
+    )
+  }
+  if (col.key === 'assigned_to') {
+    return <input type="text" placeholder="Search…" value={filters.assigned_to || ''} onChange={e => set('assigned_to', e.target.value)} className={inputCls} />
+  }
+  if (col.key === 'lease_end_date') {
+    return (
+      <div className="flex flex-col gap-0.5">
+        <input type="date" title="After" value={filters.lease_end_after || ''} onChange={e => set('lease_end_after', e.target.value)} className={inputCls} />
+        <input type="date" title="Before" value={filters.lease_end_before || ''} onChange={e => set('lease_end_before', e.target.value)} className={inputCls} />
+      </div>
+    )
+  }
+  return null
+}
+
+export default function AssetTable({ assets, selectedIds, onSelectionChange, onRowClick, filters = {}, onFilterChange }) {
   const allSelected = assets.length > 0 && assets.every(a => selectedIds.has(a.id))
+  const set = (key, value) => onFilterChange({ ...filters, [key]: value })
 
   const toggleAll = () => {
     if (allSelected) {
@@ -53,11 +116,27 @@ export default function AssetTable({ assets, selectedIds, onSelectionChange, onR
               </th>
             ))}
           </tr>
+          <tr className="border-t border-gray-200 bg-white">
+            <th className="px-3 py-2" />
+            {COLUMNS.map(col => (
+              <th key={col.key} className="px-2 py-1.5 font-normal">
+                <FilterCell col={col} filters={filters} set={set} />
+              </th>
+            ))}
+            <th className="px-2 py-1.5 font-normal">
+              <button
+                onClick={() => onFilterChange(EMPTY_FILTERS)}
+                className="text-xs text-gray-400 hover:text-gray-600 underline whitespace-nowrap"
+              >
+                Clear
+              </button>
+            </th>
+          </tr>
         </thead>
         <tbody className="divide-y divide-gray-100 bg-white">
           {assets.length === 0 && (
             <tr>
-              <td colSpan={COLUMNS.length + 1} className="px-4 py-8 text-center text-gray-400">
+              <td colSpan={COLUMNS.length + 2} className="px-4 py-8 text-center text-gray-400">
                 No assets found
               </td>
             </tr>
@@ -89,6 +168,7 @@ export default function AssetTable({ assets, selectedIds, onSelectionChange, onR
                   )}
                 </td>
               ))}
+              <td />
             </tr>
           ))}
         </tbody>

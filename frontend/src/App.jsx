@@ -1,7 +1,6 @@
 import { useState, useEffect, useCallback } from 'react'
 import { getAssets } from './api/assets'
 import ActionBar from './components/ActionBar'
-import FilterBar from './components/FilterBar'
 import AssetTable from './components/AssetTable'
 import CheckOutForm from './components/forms/CheckOutForm'
 import ReturnForm from './components/forms/ReturnForm'
@@ -10,7 +9,7 @@ import LockForm from './components/forms/LockForm'
 import WipeForm from './components/forms/WipeForm'
 import UpdateNotesForm from './components/forms/UpdateNotesForm'
 
-const EMPTY_FILTERS = { status: '', type: '', assigned_to: '', serial_number: '', label: '', lease_end_after: '', lease_end_before: '' }
+const EMPTY_FILTERS = { status: '', type: '', ownership: '', assigned_to: '', serial_number: '', label: '', lease_end_after: '', lease_end_before: '' }
 
 function parseLeaseDate(dateStr) {
   // Handle "MM/DD/YYYY" format and "YYYY-MM-DD" format
@@ -33,6 +32,7 @@ function applyFilters(assets, filters) {
     if (filters.status === 'not_historical' && a.status === 'Historical') return false
     if (filters.status && filters.status !== 'not_historical' && a.status !== filters.status) return false
     if (filters.type && (a.type || '').toLowerCase() !== filters.type.toLowerCase()) return false
+    if (filters.ownership && (a.ownership || '').toLowerCase() !== filters.ownership.toLowerCase()) return false
     if (filters.assigned_to && !(a.assigned_to || '').toLowerCase().includes(filters.assigned_to.toLowerCase())) return false
     if (filters.serial_number && !(a.serial_number || '').toLowerCase().includes(filters.serial_number.toLowerCase())) return false
     if (filters.label && !(a.label || '').toLowerCase().includes(filters.label.toLowerCase())) return false
@@ -131,8 +131,6 @@ export default function App() {
         {activeForm === 'wipe'     && <WipeForm      selectedAsset={selectedAsset} {...formProps} />}
         {activeForm === 'notes'    && <UpdateNotesForm selectedIds={selectedIds} {...formProps} />}
 
-        <FilterBar filters={filters} onChange={setFilters} />
-
         {loading ? (
           <div className="text-center py-12 text-gray-400">Loading assets…</div>
         ) : (
@@ -141,6 +139,8 @@ export default function App() {
             selectedIds={selectedIds}
             onSelectionChange={handleSelectionChange}
             onRowClick={handleRowClick}
+            filters={filters}
+            onFilterChange={setFilters}
           />
         )}
       </main>

@@ -6,7 +6,7 @@ export default defineConfig({
   plugins: [react(), tailwindcss()],
   server: {
     proxy: {
-      '/api': 'http://localhost:5001',
+      '/api': { target: 'https://frontend-rough-cloud-3819.fly.dev', changeOrigin: true },
     },
   },
 })
