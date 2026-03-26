@@ -115,6 +115,9 @@ def derive_status(row):
     if asset_status == 'Ready to Assign' and assigned_to.lower() == 'ready to assign':
         return 'Not Assigned'
 
+    if asset_status == 'Returned':
+        return 'Returned'
+
     return 'Uncategorized'
 
 

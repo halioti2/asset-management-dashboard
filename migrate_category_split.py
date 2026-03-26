@@ -47,7 +47,7 @@ CATEGORY_TO_OWNERSHIP = {
     'Purchased (Apple)': 'Purchased',
     'Purchased (Dell)':  'Purchased',
     'Donated':           'Donated',
-    'Returned':          'Returned',
+    'Returned':          '',          # ownership left blank — Returned is a status, not an ownership type
     'Unusable':          '',          # ownership left blank pending manual review
 }
 
@@ -59,8 +59,10 @@ def _derive_asset_status(category, assigned_to, returned):
     ret = (returned or '').strip()
 
     # Fixed mappings
-    if cat in ('Lease - Returned', 'Returned'):
+    if cat == 'Lease - Returned':
         return 'Historical'
+    if cat == 'Returned':
+        return 'Returned'
     if cat == 'Unusable':
         return 'Unusable'
 

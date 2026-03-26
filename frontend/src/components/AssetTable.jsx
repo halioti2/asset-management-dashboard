@@ -3,6 +3,7 @@ const STATUS_STYLES = {
   'Not Assigned': 'bg-green-100 text-green-800',
   'Historical': 'bg-gray-100 text-gray-600',
   'Locked': 'bg-red-100 text-red-800',
+  'Returned': 'bg-orange-100 text-orange-800',
 }
 
 const COLUMNS = [
@@ -59,6 +60,7 @@ function FilterCell({ col, filters, set }) {
         <option>Checked Out</option>
         <option>Not Assigned</option>
         <option>Historical</option>
+        <option>Returned</option>
         <option>Locked</option>
         <option>Uncategorized</option>
       </select>

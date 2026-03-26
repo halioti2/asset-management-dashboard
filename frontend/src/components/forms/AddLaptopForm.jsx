@@ -1,12 +1,12 @@
 import { useState } from 'react'
 import { addAsset } from '../../api/assets'
 
-const OWNERSHIP_TYPES = ['Purchased', 'Lease-Temp', 'Lease-Own', 'Donated', 'Returned']
-const ASSET_STATUSES = ['Assigned', 'Historical', 'Unusable', 'Ready to Assign']
+const OWNERSHIP_TYPES = ['Purchased', 'Lease-Temp', 'Lease-Own', 'Donated']
+const ASSET_STATUSES = ['Assigned', 'Historical', 'Returned', 'Unusable', 'Ready to Assign']
 const TYPES = ['Laptop', 'Chromebook', 'Tablet', 'Hotspot', 'Other']
 
 export default function AddLaptopForm({ onSuccess, onClose }) {
-  const [form, setForm] = useState({ type: '', serial_number: '', ownership: '', asset_status: '', label: '', date_assigned: '', lease_end_date: '', notes: '' })
+  const [form, setForm] = useState({ type: '', serial_number: '', ownership: '', asset_status: 'Ready to Assign', label: '', date_assigned: '', lease_end_date: '', notes: '' })
   const [error, setError] = useState({})
   const [submitting, setSubmitting] = useState(false)
   const [apiError, setApiError] = useState('')
